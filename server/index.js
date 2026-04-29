@@ -1,7 +1,9 @@
 import open from 'open';
 import { Server } from 'socket.io';
+import { v4 as uuidv4 } from 'uuid';
 
 import createHttpServer from './http-server.js';
+import db from './db.js';
 import { roomManager } from './room-manager.js';
 
 // Socket.IO server
@@ -85,6 +87,15 @@ async function createServer() {
     socket.on(
       'close-room',
       getRoom(({ room }, fn) => {
+        if (room.game.dbId) {
+          try {
+            db.prepare(
+              `UPDATE games SET status = 'abandoned', ended_at = ? WHERE id = ? AND status = 'in_progress'`
+            ).run(Date.now(), room.game.dbId);
+          } catch (e) {
+            console.error('DB error marking game abandoned:', e);
+          }
+        }
         roomManager.closeRoom(room);
         fn({ status: 'closedRoom' });
       })
@@ -112,6 +123,23 @@ async function createServer() {
           status: 'addedPlayer',
           game: room.game
         });
+        // Record game start in DB
+        try {
+          const gameId = uuidv4();
+          room.game.dbId = gameId;
+          room.game.moveCount = 0;
+          db.prepare(`
+            INSERT INTO games (id, room_code, player1_id, player1_name, player1_color, player2_id, player2_name, player2_color, started_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            gameId, room.code,
+            room.players[0].id, room.players[0].name, room.players[0].color,
+            room.players[1].id, room.players[1].name, room.players[1].color,
+            Date.now()
+          );
+        } catch (e) {
+          console.error('DB error recording game start:', e);
+        }
         fn({
           status: 'startedGame',
           game: room.game,
@@ -146,6 +174,27 @@ async function createServer() {
           } else {
             console.log('did not receive next move');
             console.log('current player:', room.game.currentPlayer);
+          }
+          // Record move in DB
+          if (room.game.dbId) {
+            try {
+              room.game.moveCount += 1;
+              const lastChip = room.game.grid.lastPlacedChip;
+              const placingPlayer = room.players.find((p) => p.color === lastChip.player);
+              db.prepare(`
+                INSERT INTO game_moves (id, game_id, player_id, player_color, column_index, row_index, move_number, placed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              `).run(
+                uuidv4(), room.game.dbId,
+                placingPlayer ? placingPlayer.id : null,
+                lastChip.player, lastChip.column, lastChip.row,
+                room.game.moveCount, Date.now()
+              );
+              db.prepare(`UPDATE games SET total_moves = ? WHERE id = ?`)
+                .run(room.game.moveCount, room.game.dbId);
+            } catch (e) {
+              console.error('DB error recording move:', e);
+            }
           }
         }
         fn({ status: 'placedChip', column });
@@ -200,8 +249,40 @@ async function createServer() {
           // If the other player accepts the original request to play again, start
           // a new game and broadcast the new game state to both players
           room.game.declareWinner();
+          // Record winner for the completed game
+          if (room.game.dbId) {
+            try {
+              db.prepare(
+                `UPDATE games SET winner_id = ?, winner_color = ?, status = 'completed', ended_at = ? WHERE id = ?`
+              ).run(
+                room.game.winner ? room.game.winner.id : null,
+                room.game.winner ? room.game.winner.color : null,
+                Date.now(),
+                room.game.dbId
+              );
+            } catch (e) {
+              console.error('DB error recording winner:', e);
+            }
+          }
           room.game.resetGame();
           room.game.startGame();
+          // Record the new game start
+          try {
+            const newGameId = uuidv4();
+            room.game.dbId = newGameId;
+            room.game.moveCount = 0;
+            db.prepare(`
+              INSERT INTO games (id, room_code, player1_id, player1_name, player1_color, player2_id, player2_name, player2_color, started_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              newGameId, room.code,
+              room.players[0].id, room.players[0].name, room.players[0].color,
+              room.players[1].id, room.players[1].name, room.players[1].color,
+              Date.now()
+            );
+          } catch (e) {
+            console.error('DB error recording new game start:', e);
+          }
           room.broadcast('start-new-game', {
             status: 'startedGame',
             game: room.game

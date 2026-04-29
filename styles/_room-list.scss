@@ -1,0 +1,118 @@
+// Room List page
+
+#room-list {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--page-spacing-top) var(--page-spacing-x) 40px;
+  text-align: center;
+
+  h2 {
+    font-weight: 400;
+    font-size: 20px;
+    margin: 0 0 20px;
+  }
+}
+
+.room-list-message {
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+.room-list-error {
+  color: var(--button-warn-background-color);
+  opacity: 1;
+}
+
+.room-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.room-card {
+  display: grid;
+  grid-template-columns: 5rem 1fr auto auto;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--empty-chip-slot-border-color);
+  border-radius: 6px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.room-card-code {
+  font-size: 18px;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+.room-card-players {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.room-card-player {
+  font-size: 13px;
+
+  &.red {
+    color: var(--player-color-red);
+  }
+  &.blue {
+    color: var(--player-color-blue);
+  }
+  &.empty {
+    opacity: 0.45;
+    font-style: italic;
+  }
+}
+
+.room-card-status {
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0.65;
+
+  &.in-progress {
+    color: var(--button-warn-background-color);
+    opacity: 1;
+  }
+}
+
+.room-card-action {
+  padding: 4px 10px;
+  border: 1px solid hsla(0, 0%, 0%, 0.25);
+  border-radius: 3px;
+  background-color: var(--button-background-color);
+  color: var(--button-color);
+  font-size: 13px;
+  white-space: nowrap;
+  text-decoration: none;
+
+  &:hover {
+    background-color: var(--button-background-color-active);
+  }
+}
+
+.room-list-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  font-size: 14px;
+
+  button {
+    border: solid 1px hsla(0, 0%, 0%, 0.25);
+    border-radius: 3px;
+    padding: 4px 10px;
+    background-color: var(--button-background-color);
+    font-family: var(--sans-serif);
+    color: var(--button-color);
+    cursor: pointer;
+
+    &:disabled {
+      --button-background-color: var(--button-disabled-background-color);
+    }
+  }
+}

@@ -8,6 +8,7 @@ class Room {
     this.code = code;
     this.players = players;
     this.game = game;
+    this.createdAt = Date.now();
     // The date/time the room was last seen completely empty (i.e. both players
     // were disconnected)
     this.lastMarkedInactive = null;
@@ -17,10 +18,12 @@ class Room {
     player = new Player(player);
     this.players.push(player);
     player.socket = socket;
-    socket.player = player;
     player.room = this;
-    socket.room = this;
-    socket.join(this.code);
+    if (socket) {
+      socket.player = player;
+      socket.room = this;
+      socket.join(this.code);
+    }
     return player;
   }
 
@@ -36,9 +39,11 @@ class Room {
     const player = this.getPlayerById(playerId) || this.getFirstDisconnectedPlayer();
     if (player) {
       player.socket = socket;
-      socket.player = player;
-      socket.room = this;
-      socket.join(this.code);
+      if (socket) {
+        socket.player = player;
+        socket.room = this;
+        socket.join(this.code);
+      }
     }
     return player;
   }

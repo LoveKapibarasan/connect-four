@@ -1,5 +1,6 @@
 import moment from 'moment';
 
+import db from './db.js';
 import Room from './room.js';
 
 class RoomManager {
@@ -69,6 +70,15 @@ class RoomManager {
         if (room.isAbandoned()) {
           // Yes, it is safe to remove elements from a Set while iterating over
           // it; see <https://stackoverflow.com/a/28306768/560642>
+          if (room.game.dbId) {
+            try {
+              db.prepare(
+                `UPDATE games SET status = 'abandoned', ended_at = ? WHERE id = ? AND status = 'in_progress'`
+              ).run(Date.now(), room.game.dbId);
+            } catch (e) {
+              console.error('DB error marking abandoned game:', e);
+            }
+          }
           this.closeRoom(room);
           console.log(`room ${room.code} has been permanently deleted`);
         }

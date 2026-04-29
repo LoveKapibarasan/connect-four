@@ -20,3 +20,6 @@ dist/
 
 # Generated test results (not used)
 test-results
+
+# SQLite database
+data/
