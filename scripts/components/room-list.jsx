@@ -53,12 +53,16 @@ class RoomListComponent {
                   )}
                 </div>
                 <div
-                  className={`room-card-status ${room.status === 'inProgress' ? 'in-progress' : 'waiting'}`}
+                  className={`room-card-status ${room.status === 'inProgress' ? 'in-progress' : room.status === 'finished' ? 'finished' : 'waiting'}`}
                 >
-                  {room.status === 'inProgress' ? 'In Progress' : 'Waiting for Player'}
+                  {room.status === 'inProgress'
+                    ? 'In Progress'
+                    : room.status === 'finished'
+                      ? 'Finished'
+                      : 'Waiting for Player'}
                 </div>
                 <a className="room-card-action" href={`/room/${room.code}`}>
-                  {room.status === 'inProgress' ? 'Watch' : 'Join'}
+                  {room.status === 'waitingForPlayers' ? 'Join' : 'Watch'}
                 </a>
               </div>
             ))}
@@ -68,7 +72,8 @@ class RoomListComponent {
           <button onclick={() => this.loadRooms()} disabled={this.loading}>
             Refresh
           </button>
-          <a href="/">Back to Home</a>
+          <a href="/history">Game History</a>
+          <a href="/">Home</a>
         </div>
       </div>
     );

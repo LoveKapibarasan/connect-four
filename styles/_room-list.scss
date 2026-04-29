@@ -78,6 +78,9 @@
     color: var(--button-warn-background-color);
     opacity: 1;
   }
+  &.finished {
+    opacity: 0.4;
+  }
 }
 
 .room-card-action {

@@ -86,7 +86,7 @@ async function createHttpServer() {
     // (the middleware can be safely disabled in Production because we use Vite
     // to pre-build the project anyway)
     vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, allowedHosts: process.env.VITE_ALLOWED_HOSTS ? process.env.VITE_ALLOWED_HOSTS.split(',') : true },
       appType: 'custom'
     });
     app.use(vite.middlewares);
@@ -97,15 +97,27 @@ async function createHttpServer() {
   const apiRouter = express.Router();
   app.use('/api', express.json(), apiRouter);
 
-  // Room list
+  // Room list — only show rooms with at least one connected player
   apiRouter.get('/rooms', (req, res) => {
-    const rooms = Object.values(roomManager.roomsByCode).map((room) => ({
-      code: room.code,
-      playerCount: room.players.length,
-      players: room.players.map((p) => ({ name: p.name, color: p.color })),
-      status: room.game.inProgress ? 'inProgress' : 'waitingForPlayers',
-      createdAt: room.createdAt
-    }));
+    const rooms = Object.values(roomManager.roomsByCode)
+      .filter((room) => !room.isEmpty())
+      .map((room) => {
+        let status;
+        if (room.game.inProgress) {
+          status = 'inProgress';
+        } else if (room.players.length < 2) {
+          status = 'waitingForPlayers';
+        } else {
+          status = 'finished';
+        }
+        return {
+          code: room.code,
+          playerCount: room.players.filter((p) => p.connected).length,
+          players: room.players.map((p) => ({ name: p.name, color: p.color })),
+          status,
+          createdAt: room.createdAt
+        };
+      });
     res.json(rooms);
   });
 
@@ -413,6 +425,10 @@ async function createHttpServer() {
 
   app.get('/rooms', async (req, res) => {
     await transformHtml(vite, req, res, indexPath, { pageTitle: 'Browse Rooms - Connect Four' });
+  });
+
+  app.get('/history', async (req, res) => {
+    await transformHtml(vite, req, res, indexPath, { pageTitle: 'Game History - Connect Four' });
   });
 
   app.get('/room/:roomCode', async (req, res) => {

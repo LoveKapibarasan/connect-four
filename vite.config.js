@@ -22,7 +22,7 @@ export default defineConfig({
         // it's also worth noting that the webmanifest defined later in this
         // file is automatically precached by Vite PWA (i.e. there is no need to
         // include *.webmanifest in the glob patterns list here)
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'], server: { allowedHosts: process.env.VITE_ALLOWED_HOSTS ? process.env.VITE_ALLOWED_HOSTS.split(',') : true },
         // A nice-to-have optimization for purging old cache entries after the
         // service worker has updated; see:
         // <https://vite-pwa-org.netlify.app/guide/prompt-for-update.html#cleanup-outdated-caches>
