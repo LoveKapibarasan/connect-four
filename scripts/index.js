@@ -1,6 +1,7 @@
 import m from 'mithril';
 import AppComponent from './components/app.jsx';
 import HistoryComponent from './components/history.jsx';
+import ReplayComponent from './components/replay.jsx';
 import RoomListComponent from './components/room-list.jsx';
 import '../styles/index.scss';
 import '@fontsource/ubuntu/400.css';
@@ -12,5 +13,6 @@ m.route(document.querySelector('main'), '/', {
   '/': AppComponent,
   '/room/:roomCode': AppComponent,
   '/rooms': RoomListComponent,
-  '/history': HistoryComponent
+  '/history': HistoryComponent,
+  '/history/:gameId': ReplayComponent
 });

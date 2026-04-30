@@ -431,6 +431,10 @@ async function createHttpServer() {
     await transformHtml(vite, req, res, indexPath, { pageTitle: 'Game History - Connect Four' });
   });
 
+  app.get('/history/:gameId', async (req, res) => {
+    await transformHtml(vite, req, res, indexPath, { pageTitle: 'Game Replay - Connect Four' });
+  });
+
   app.get('/room/:roomCode', async (req, res) => {
     const room = roomManager.getRoom(req.params.roomCode);
     if (room) {

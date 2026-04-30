@@ -3,6 +3,11 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  server: {
+    allowedHosts: process.env.VITE_ALLOWED_HOSTS
+      ? process.env.VITE_ALLOWED_HOSTS.split(',')
+      : true
+  },
   // Enable JSX processing
   esbuild: {
     // We need to use _m as the imported name so that it doesn't collide with
@@ -22,7 +27,7 @@ export default defineConfig({
         // it's also worth noting that the webmanifest defined later in this
         // file is automatically precached by Vite PWA (i.e. there is no need to
         // include *.webmanifest in the glob patterns list here)
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'], server: { allowedHosts: process.env.VITE_ALLOWED_HOSTS ? process.env.VITE_ALLOWED_HOSTS.split(',') : true },
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         // A nice-to-have optimization for purging old cache entries after the
         // service worker has updated; see:
         // <https://vite-pwa-org.netlify.app/guide/prompt-for-update.html#cleanup-outdated-caches>

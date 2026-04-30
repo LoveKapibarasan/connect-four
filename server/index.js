@@ -210,6 +210,15 @@ async function createServer() {
         room.game.endGame();
         const localPlayer = room.getPlayerById(playerId);
         room.game.requestingPlayer = localPlayer;
+        if (room.game.dbId) {
+          try {
+            db.prepare(
+              `UPDATE games SET status = 'abandoned', ended_at = ? WHERE id = ? AND status = 'in_progress'`
+            ).run(Date.now(), room.game.dbId);
+          } catch (e) {
+            console.error('DB error marking game abandoned on end-game:', e);
+          }
+        }
         room.broadcast('end-game', {
           status: 'endedGame',
           requestingPlayer: room.game.requestingPlayer
@@ -316,7 +325,7 @@ async function createServer() {
       }
       // As soon as both players disconnect from the room (making it completely
       // empty), mark the room for deletion
-      if (socket.room && !socket.room.isEmpty()) {
+      if (socket.room && socket.room.isEmpty()) {
         roomManager.markRoomAsInactive(socket.room);
       }
     });

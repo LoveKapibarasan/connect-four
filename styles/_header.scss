@@ -11,6 +11,40 @@ h1 {
     margin-top: var(--page-spacing-top);
   }
 }
+
+.game-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: calc(var(--chip-size) + (var(--chip-margin) * 2));
+  margin-bottom: 20px;
+  @include if-hybrid-layout() {
+    margin-top: var(--page-spacing-top);
+  }
+  h1 {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+}
+
+.mute-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  padding: 2px 4px;
+  line-height: 1;
+  border-radius: 4px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+  &:hover {
+    opacity: 1;
+  }
+  &:focus {
+    outline: none;
+  }
+}
 .nav-link {
   position: absolute;
   top: 8px;

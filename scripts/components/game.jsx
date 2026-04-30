@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import m from 'mithril';
 import Game from '../models/game.js';
+import soundManager from '../models/sound-manager.js';
 import DashboardComponent from './dashboard.jsx';
 import GridComponent from './grid.jsx';
 import PlayerAreaComponent from './player-area.jsx';
@@ -24,6 +25,18 @@ class GameComponent {
     // connection is opened)
     this.listenForOnlineGameEvents({ roomCode });
     this.handlePlayerConnections({ roomCode });
+    this.listenForSoundEvents();
+  }
+
+  listenForSoundEvents() {
+    this.game.on('player:place-chip', () => soundManager.drop());
+    this.game.on('game:declare-winner', () => soundManager.win());
+    this.game.on('game:declare-tie', () => soundManager.tie());
+  }
+
+  toggleMute() {
+    soundManager.toggleMute();
+    m.redraw();
   }
 
   joinRoom({ roomCode }) {
@@ -104,7 +117,16 @@ class GameComponent {
     return (
       <div id="game" className={clsx({ 'in-progress': this.game.inProgress })}>
         <div className="game-column">
-          <h1>Connect Four</h1>
+          <div className="game-header">
+            <h1>Connect Four</h1>
+            <button
+              className="mute-button"
+              onclick={() => this.toggleMute()}
+              title={soundManager.muted ? 'Unmute sounds' : 'Mute sounds'}
+            >
+              {soundManager.muted ? '🔇' : '🔊'}
+            </button>
+          </div>
           <DashboardComponent game={this.game} session={this.session} roomCode={roomCode} />
         </div>
         <div className="game-column">

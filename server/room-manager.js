@@ -59,6 +59,17 @@ class RoomManager {
   markRoomAsInactive(room) {
     room.lastMarkedInactive = Date.now();
     this.inactiveRooms.add(room);
+    // Finalize any in-progress game immediately so the DB reflects the true end
+    // time rather than waiting up to 10 minutes for the abandoned-room poll
+    if (room.game.dbId) {
+      try {
+        db.prepare(
+          `UPDATE games SET status = 'abandoned', ended_at = ? WHERE id = ? AND status = 'in_progress'`
+        ).run(Date.now(), room.game.dbId);
+      } catch (e) {
+        console.error('DB error finalizing game on room inactive:', e);
+      }
+    }
     console.log(`room ${room.code} marked as inactive`);
   }
 
