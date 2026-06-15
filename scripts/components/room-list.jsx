@@ -1,4 +1,5 @@
 import m from 'mithril';
+import query from '../models/query.js';
 
 class RoomListComponent {
   oninit() {
@@ -14,15 +15,17 @@ class RoomListComponent {
   }
 
   loadRooms() {
-    m.request({ method: 'GET', url: '/api/rooms' })
+    query('list-rooms')
       .then((rooms) => {
         this.rooms = rooms;
         this.loading = false;
         this.error = null;
+        m.redraw();
       })
       .catch(() => {
         this.error = 'Failed to load rooms.';
         this.loading = false;
+        m.redraw();
       });
   }
 
@@ -48,9 +51,7 @@ class RoomListComponent {
                       {p.name || '?'}
                     </span>
                   ))}
-                  {room.playerCount < 2 && (
-                    <span className="room-card-player empty">Waiting…</span>
-                  )}
+                  {room.playerCount < 2 && <span className="room-card-player empty">Waiting…</span>}
                 </div>
                 <div
                   className={`room-card-status ${room.status === 'inProgress' ? 'in-progress' : room.status === 'finished' ? 'finished' : 'waiting'}`}

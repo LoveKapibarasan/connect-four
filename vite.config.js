@@ -4,9 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 // https://vitejs.dev/config/
 export default defineConfig({
   server: {
-    allowedHosts: process.env.VITE_ALLOWED_HOSTS
-      ? process.env.VITE_ALLOWED_HOSTS.split(',')
-      : true
+    allowedHosts: process.env.VITE_ALLOWED_HOSTS ? process.env.VITE_ALLOWED_HOSTS.split(',') : true
   },
   // Enable JSX processing
   esbuild: {

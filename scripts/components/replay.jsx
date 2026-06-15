@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import m from 'mithril';
+import query from '../models/query.js';
 
 const COLS = 7;
 const ROWS = 6;
@@ -63,15 +64,17 @@ class ReplayComponent {
   }
 
   loadGame() {
-    m.request({ method: 'GET', url: `/api/games/${this.gameId}` })
+    query('get-game', { gameId: this.gameId })
       .then((data) => {
         this.game = data;
         this.moves = data.moves || [];
         this.loading = false;
+        m.redraw();
       })
       .catch(() => {
         this.error = 'Failed to load game.';
         this.loading = false;
+        m.redraw();
       });
   }
 
@@ -209,9 +212,7 @@ class ReplayComponent {
                 const chip = columns[c][r];
                 const isWinner = winners.has(`${c},${r}`);
                 const isLastPlaced =
-                  currentMove &&
-                  currentMove.column_index === c &&
-                  currentMove.row_index === r;
+                  currentMove && currentMove.column_index === c && currentMove.row_index === r;
                 return chip ? (
                   <div
                     key={r}
@@ -271,7 +272,11 @@ class ReplayComponent {
           >
             ⏴
           </button>
-          <button className="play-pause" onclick={() => this.togglePlay()} title={this.playing ? 'Pause' : 'Play'}>
+          <button
+            className="play-pause"
+            onclick={() => this.togglePlay()}
+            title={this.playing ? 'Pause' : 'Play'}
+          >
             {this.playing ? '⏸' : '▶'}
           </button>
           <button

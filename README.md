@@ -21,7 +21,7 @@ https://connectfour.calebevans.me/
 - **Online multiplayer** — share a room link and play with anyone
 - **Room List** — browse open rooms and join or spectate live games at `/rooms`
 - **Game history** — every completed game and all moves are stored in a local SQLite database
-- **Bot / automation API** — a REST API for scripted or AI-driven players (no WebSocket required)
+- **Bot / automation API** — a Socket.IO interface for scripted or AI-driven players
 
 ## Implementation
 
@@ -98,15 +98,27 @@ You will then be able to view the app at `http://localhost:8080`. Any app files
 are recompiled automatically when you make changes to them (as long as
 `pnpm dev` is still running).
 
-## REST API
+## Real-time API (Socket.IO)
 
-All endpoints return JSON. The bot endpoints accept JSON request bodies.
+All client/server communication — gameplay, room browsing, and history —
+happens over a single [Socket.IO][socket-io] connection. Each request is an
+event emitted with an acknowledgement callback; the server replies through that
+callback. Connect to the server's origin (e.g. `http://localhost:8080`) and
+emit the events below.
 
-### Rooms
+[socket-io]: https://socket.io/
 
-#### `GET /api/rooms`
+### Read-only query events
 
-Returns a list of all currently active rooms.
+These power the room list, history, and replay pages and have no side effects.
+
+#### `list-rooms`
+
+```js
+socket.emit('list-rooms', {}, (rooms) => { ... });
+```
+
+Responds with all currently active rooms:
 
 ```json
 [
@@ -115,7 +127,7 @@ Returns a list of all currently active rooms.
     "playerCount": 2,
     "players": [
       { "name": "Alice", "color": "red" },
-      { "name": "Bob",   "color": "blue" }
+      { "name": "Bob", "color": "blue" }
     ],
     "status": "inProgress",
     "createdAt": 1714320000000
@@ -123,19 +135,25 @@ Returns a list of all currently active rooms.
 ]
 ```
 
-`status` is either `"waitingForPlayers"` or `"inProgress"`.
+`status` is one of `"waitingForPlayers"`, `"inProgress"`, or `"finished"`.
 
-### Game history
+#### `list-games`
 
-#### `GET /api/games`
+```js
+socket.emit('list-games', { limit: 50, offset: 0 }, (games) => { ... });
+```
 
-Returns up to 50 games ordered by start time (newest first). Accepts optional
-query parameters `limit` (max 200) and `offset`.
+Responds with games ordered by start time (newest first). `limit` defaults to
+50 (max 200) and `offset` defaults to 0.
 
-#### `GET /api/games/:id`
+#### `get-game`
 
-Returns a single game record plus a `moves` array containing every chip
-placement in order.
+```js
+socket.emit('get-game', { gameId: '...' }, (game) => { ... });
+```
+
+Responds with a single game record plus a `moves` array containing every chip
+placement in order (or `{ error: 'Game not found' }`):
 
 ```json
 {
@@ -148,101 +166,54 @@ placement in order.
   "started_at": 1714320000000,
   "ended_at": 1714320300000,
   "total_moves": 12,
-  "moves": [
-    { "move_number": 1, "player_color": "blue", "column_index": 3, "row_index": 0 },
-    ...
-  ]
+  "moves": [{ "move_number": 1, "player_color": "blue", "column_index": 3, "row_index": 0 }]
 }
 ```
 
 ### Bot / automation API
 
-These endpoints let any external program play a full game over HTTP without a
-WebSocket connection. Bots can play against each other or against a human
-player; human clients receive the normal WebSocket events as moves arrive.
+Bots play over the same Socket.IO events as the browser client, so they can
+compete against each other or against a human; human clients receive the usual
+events as moves arrive. The relevant events are:
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| `POST` | `/api/bot/open-room` | Open a room as Player 1 |
-| `POST` | `/api/bot/join-room` | Join as Player 2 and start the game |
-| `GET` | `/api/bot/state/:roomCode` | Poll game state and `yourTurn` flag |
-| `POST` | `/api/bot/place-chip` | Place a chip in a column (0–6) |
-| `POST` | `/api/bot/end-game` | Signal intent to stop the current game |
-| `POST` | `/api/bot/new-game` | Request or accept a rematch; submit winner |
-| `POST` | `/api/bot/close-room` | Remove the room and mark game abandoned |
+| Event               | Direction | Purpose                                                       |
+| ------------------- | --------- | ------------------------------------------------------------- |
+| `open-room`         | emit      | Open a room as Player 1 → `{ roomCode, localPlayer, game }`   |
+| `add-player`        | emit      | Join as Player 2 and start the game → `{ localPlayer, game }` |
+| `place-chip`        | emit      | Place a chip: `{ roomCode, column }` → `{ status, column }`   |
+| `receive-next-move` | listen    | Server pushes `{ column }` when it becomes your turn          |
+| `end-game`          | emit      | Signal intent to stop the current game                        |
+| `request-new-game`  | emit      | Request or accept a rematch (include `winner`)                |
+| `close-room`        | emit      | Remove the room and mark the game abandoned                   |
 
-#### Open a room as Player 1
+Every emitted event should include the `roomCode` (and `playerId` once known) in
+its payload. Because the winner of a game is determined client-side, both
+players must submit a `winner` (or `null` for a draw) via `request-new-game`
+before the next game starts.
 
-```
-POST /api/bot/open-room
-{ "player": { "name": "MyBot", "color": "red" } }
-→ { roomCode, playerId, game }
-```
+### Bot client and demo
 
-#### Join a room as Player 2 (starts the game immediately)
-
-```
-POST /api/bot/join-room
-{ "roomCode": "ABCD", "player": { "name": "MyBot", "color": "blue" } }
-→ { playerId, game }
-```
-
-#### Poll game state
+A reusable bot client lives in [`bot/connect-four-bot.js`](bot/connect-four-bot.js),
+and [`bot/play-demo.js`](bot/play-demo.js) uses it to play two bots against each
+other. With the app running (`pnpm dev`), in another terminal run:
 
 ```
-GET /api/bot/state/:roomCode?playerId=<id>
-→ { game, yourTurn, playerCount }
+pnpm bot:demo            # plays against http://localhost:8080
+pnpm bot:demo <url>      # target a different server
 ```
 
-Poll this until `yourTurn` is `true`, then place a chip.
-
-#### Place a chip
-
-```
-POST /api/bot/place-chip
-{ "roomCode": "ABCD", "playerId": "<id>", "column": 3 }
-→ { status, column, game }
-```
-
-Column is 0-indexed. Returns `400` if it is not your turn or the column is full.
-
-#### Request or accept a new game
-
-```
-POST /api/bot/new-game
-{ "roomCode": "ABCD", "playerId": "<id>", "winner": { "color": "red" } }
-```
-
-Pass `winner: null` for a draw. Both players must call this endpoint; the
-second call records the result and starts the next game.
-
-### Minimal bot example
+The client itself is small:
 
 ```js
-const base = 'http://localhost:8080/api/bot';
-const post = (path, body) =>
-  fetch(`${base}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  }).then((r) => r.json());
+import ConnectFourBot from './bot/connect-four-bot.js';
 
-const { roomCode, playerId: p1 } = await post('/open-room', {
-  player: { name: 'Bot1', color: 'red' }
+const bot = new ConnectFourBot({ name: 'MyBot', color: 'red' });
+await bot.connect();
+const { roomCode } = await bot.openRoom();
+
+// Drop a chip whenever it becomes our turn
+bot.onYourTurn(() => {
+  const columns = bot.legalColumns;
+  if (columns.length) bot.placeChip(columns[0]);
 });
-
-const { playerId: p2 } = await post('/join-room', {
-  roomCode,
-  player: { name: 'Bot2', color: 'blue' }
-});
-
-const players = { red: p1, blue: p2 };
-
-for (let col = 0; col < 7; col++) {
-  const { game } = await fetch(`${base}/state/${roomCode}`).then((r) => r.json());
-  if (!game.inProgress) break;
-  await post('/place-chip', { roomCode, playerId: players[game.currentPlayer], column: col });
-}
-
-await post('/close-room', { roomCode, playerId: p1 });
 ```

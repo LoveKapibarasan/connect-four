@@ -1,0 +1,25 @@
+databases:
+  - name: connect-four-db
+    databaseName: connect_four
+    user: connect_four_user
+    plan: free
+    region: oregon
+
+services:
+  - type: web
+    name: connect-four
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: NODE_ENV
+        value: production
+      - key: DISABLE_SSL
+        value: '1'
+      - key: DATABASE_URL
+        fromDatabase:
+          name: connect-four-db
+          property: connectionString

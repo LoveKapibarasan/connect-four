@@ -8,6 +8,7 @@ import { roomManager } from './room-manager.js';
 
 // Socket.IO server
 async function createServer() {
+  await db.init();
   const httpServer = await createHttpServer();
   const io = new Server(httpServer);
 
@@ -15,10 +16,10 @@ async function createServer() {
   // specified room exists, otherwise responding with an error message if the room
   // does not exist
   function getRoom(callback) {
-    return (options, fn) => {
+    return async (options, fn) => {
       options.room = roomManager.getRoom(options.roomCode);
       if (options.room) {
-        callback(options, fn);
+        await callback(options, fn);
       } else {
         console.log(`room ${options.roomCode} not found`);
         fn({ status: 'roomNotFound' });
@@ -86,12 +87,14 @@ async function createServer() {
 
     socket.on(
       'close-room',
-      getRoom(({ room }, fn) => {
+      getRoom(async ({ room }, fn) => {
         if (room.game.dbId) {
           try {
-            db.prepare(
-              `UPDATE games SET status = 'abandoned', ended_at = ? WHERE id = ? AND status = 'in_progress'`
-            ).run(Date.now(), room.game.dbId);
+            await db.run(
+              `UPDATE games SET status = 'abandoned', ended_at = ? WHERE id = ? AND status = 'in_progress'`,
+              Date.now(),
+              room.game.dbId
+            );
           } catch (e) {
             console.error('DB error marking game abandoned:', e);
           }
@@ -114,7 +117,7 @@ async function createServer() {
 
     socket.on(
       'add-player',
-      getRoom(({ room, player }, fn) => {
+      getRoom(async ({ room, player }, fn) => {
         console.log(`add player to room ${room.code}`);
         const localPlayer = room.addPlayer({ player, socket });
         room.game.startGame();
@@ -128,13 +131,19 @@ async function createServer() {
           const gameId = uuidv4();
           room.game.dbId = gameId;
           room.game.moveCount = 0;
-          db.prepare(`
+          await db.run(
+            `
             INSERT INTO games (id, room_code, player1_id, player1_name, player1_color, player2_id, player2_name, player2_color, started_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            gameId, room.code,
-            room.players[0].id, room.players[0].name, room.players[0].color,
-            room.players[1].id, room.players[1].name, room.players[1].color,
+          `,
+            gameId,
+            room.code,
+            room.players[0].id,
+            room.players[0].name,
+            room.players[0].color,
+            room.players[1].id,
+            room.players[1].name,
+            room.players[1].color,
             Date.now()
           );
         } catch (e) {
@@ -161,7 +170,7 @@ async function createServer() {
 
     socket.on(
       'place-chip',
-      getRoom(({ room, column }, fn) => {
+      getRoom(async ({ room, column }, fn) => {
         console.log(`place chip ${room.code}`);
         if (column !== null) {
           room.game.placeChip({ column });
@@ -181,17 +190,25 @@ async function createServer() {
               room.game.moveCount += 1;
               const lastChip = room.game.grid.lastPlacedChip;
               const placingPlayer = room.players.find((p) => p.color === lastChip.player);
-              db.prepare(`
+              await db.run(
+                `
                 INSERT INTO game_moves (id, game_id, player_id, player_color, column_index, row_index, move_number, placed_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-              `).run(
-                uuidv4(), room.game.dbId,
+              `,
+                uuidv4(),
+                room.game.dbId,
                 placingPlayer ? placingPlayer.id : null,
-                lastChip.player, lastChip.column, lastChip.row,
-                room.game.moveCount, Date.now()
+                lastChip.player,
+                lastChip.column,
+                lastChip.row,
+                room.game.moveCount,
+                Date.now()
               );
-              db.prepare(`UPDATE games SET total_moves = ? WHERE id = ?`)
-                .run(room.game.moveCount, room.game.dbId);
+              await db.run(
+                `UPDATE games SET total_moves = ? WHERE id = ?`,
+                room.game.moveCount,
+                room.game.dbId
+              );
             } catch (e) {
               console.error('DB error recording move:', e);
             }
@@ -205,16 +222,18 @@ async function createServer() {
 
     socket.on(
       'end-game',
-      getRoom(({ playerId, room }, fn) => {
+      getRoom(async ({ playerId, room }, fn) => {
         console.log('end game', playerId);
         room.game.endGame();
         const localPlayer = room.getPlayerById(playerId);
         room.game.requestingPlayer = localPlayer;
         if (room.game.dbId) {
           try {
-            db.prepare(
-              `UPDATE games SET status = 'abandoned', ended_at = ? WHERE id = ? AND status = 'in_progress'`
-            ).run(Date.now(), room.game.dbId);
+            await db.run(
+              `UPDATE games SET status = 'abandoned', ended_at = ? WHERE id = ? AND status = 'in_progress'`,
+              Date.now(),
+              room.game.dbId
+            );
           } catch (e) {
             console.error('DB error marking game abandoned on end-game:', e);
           }
@@ -232,7 +251,7 @@ async function createServer() {
 
     socket.on(
       'request-new-game',
-      getRoom(({ playerId, room, winner }, fn) => {
+      getRoom(async ({ playerId, room, winner }, fn) => {
         console.log('request new game', playerId);
         const localPlayer = room.getPlayerById(playerId);
         localPlayer.lastSubmittedWinner = winner;
@@ -261,9 +280,8 @@ async function createServer() {
           // Record winner for the completed game
           if (room.game.dbId) {
             try {
-              db.prepare(
-                `UPDATE games SET winner_id = ?, winner_color = ?, status = 'completed', ended_at = ? WHERE id = ?`
-              ).run(
+              await db.run(
+                `UPDATE games SET winner_id = ?, winner_color = ?, status = 'completed', ended_at = ? WHERE id = ?`,
                 room.game.winner ? room.game.winner.id : null,
                 room.game.winner ? room.game.winner.color : null,
                 Date.now(),
@@ -280,13 +298,19 @@ async function createServer() {
             const newGameId = uuidv4();
             room.game.dbId = newGameId;
             room.game.moveCount = 0;
-            db.prepare(`
+            await db.run(
+              `
               INSERT INTO games (id, room_code, player1_id, player1_name, player1_color, player2_id, player2_name, player2_color, started_at)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(
-              newGameId, room.code,
-              room.players[0].id, room.players[0].name, room.players[0].color,
-              room.players[1].id, room.players[1].name, room.players[1].color,
+            `,
+              newGameId,
+              room.code,
+              room.players[0].id,
+              room.players[0].name,
+              room.players[0].color,
+              room.players[1].id,
+              room.players[1].name,
+              room.players[1].color,
               Date.now()
             );
           } catch (e) {
@@ -301,6 +325,56 @@ async function createServer() {
       })
     );
 
+    // Read-only query events (formerly the GET /api/* REST endpoints); each
+    // responds via its Socket.IO acknowledgement callback
+
+    socket.on('list-rooms', (data, fn) => {
+      const rooms = Object.values(roomManager.roomsByCode)
+        .filter((room) => !room.isEmpty())
+        .map((room) => {
+          let status;
+          if (room.game.inProgress) {
+            status = 'inProgress';
+          } else if (room.players.length < 2) {
+            status = 'waitingForPlayers';
+          } else {
+            status = 'finished';
+          }
+          return {
+            code: room.code,
+            playerCount: room.players.filter((p) => p.connected).length,
+            players: room.players.map((p) => ({ name: p.name, color: p.color })),
+            status,
+            createdAt: room.createdAt
+          };
+        });
+      fn(rooms);
+    });
+
+    socket.on('list-games', async ({ limit, offset } = {}, fn) => {
+      const resolvedLimit = Math.min(parseInt(limit) || 50, 200);
+      const resolvedOffset = parseInt(offset) || 0;
+      const games = await db.all(
+        'SELECT * FROM games ORDER BY started_at DESC LIMIT ? OFFSET ?',
+        resolvedLimit,
+        resolvedOffset
+      );
+      fn(games);
+    });
+
+    socket.on('get-game', async ({ gameId }, fn) => {
+      const game = await db.get('SELECT * FROM games WHERE id = ?', gameId);
+      if (!game) {
+        fn({ error: 'Game not found' });
+        return;
+      }
+      const moves = await db.all(
+        'SELECT * FROM game_moves WHERE game_id = ? ORDER BY move_number ASC',
+        gameId
+      );
+      fn({ ...game, moves });
+    });
+
     // Reaction events
 
     socket.on(
@@ -313,7 +387,7 @@ async function createServer() {
       })
     );
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       console.log(`disconnected: ${socket.id}`);
       // Indicate that this player is now disconnected
       if (socket.player) {
@@ -326,7 +400,7 @@ async function createServer() {
       // As soon as both players disconnect from the room (making it completely
       // empty), mark the room for deletion
       if (socket.room && socket.room.isEmpty()) {
-        roomManager.markRoomAsInactive(socket.room);
+        await roomManager.markRoomAsInactive(socket.room);
       }
     });
   });

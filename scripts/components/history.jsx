@@ -1,4 +1,5 @@
 import m from 'mithril';
+import query from '../models/query.js';
 
 function formatDate(ts) {
   if (!ts) return '—';
@@ -26,14 +27,16 @@ class HistoryComponent {
   }
 
   loadGames() {
-    m.request({ method: 'GET', url: '/api/games' })
+    query('list-games')
       .then((games) => {
         this.games = games;
         this.loading = false;
+        m.redraw();
       })
       .catch(() => {
         this.error = 'Failed to load history.';
         this.loading = false;
+        m.redraw();
       });
   }
 
@@ -70,9 +73,7 @@ class HistoryComponent {
                   <tr key={g.id} className={isAbandoned ? 'abandoned' : ''}>
                     <td className="history-date">{formatDate(g.started_at)}</td>
                     <td className="history-players">
-                      <span className={`history-player ${g.player1_color}`}>
-                        {g.player1_name}
-                      </span>
+                      <span className={`history-player ${g.player1_color}`}>{g.player1_name}</span>
                       <span className="history-vs">vs</span>
                       <span className={`history-player ${g.player2_color || ''}`}>
                         {g.player2_name || '—'}
@@ -99,9 +100,7 @@ class HistoryComponent {
                       )}
                     </td>
                     <td className="history-replay">
-                      {g.total_moves > 0 ? (
-                        <a href={`/history/${g.id}`}>Replay</a>
-                      ) : null}
+                      {g.total_moves > 0 ? <a href={`/history/${g.id}`}>Replay</a> : null}
                     </td>
                   </tr>
                 );
