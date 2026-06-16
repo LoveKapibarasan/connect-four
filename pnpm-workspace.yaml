@@ -1,0 +1,18 @@
+# pnpm 11+ no longer reads the "pnpm" field from package.json; these settings
+# (formerly package.json > pnpm.overrides / pnpm.onlyBuiltDependencies) live
+# here instead. See https://pnpm.io/settings
+#
+# allowBuilds explicitly approves the dependencies permitted to run install
+# scripts. Without this, pnpm 11 aborts a CI/--frozen-lockfile install with
+# ERR_PNPM_IGNORED_BUILDS (which broke the Docker/Render build). esbuild needs
+# its script to install the platform binary that `vite build` relies on.
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - esbuild
+allowBuilds:
+  '@parcel/watcher': true
+  esbuild: true
+overrides:
+  cookie@<0.7.0: '>=0.7.0'
+  serialize-javascript@<=7.0.2: '>=7.0.3'
+  serialize-javascript@<7.0.5: '>=7.0.5'
