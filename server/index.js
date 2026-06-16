@@ -27,6 +27,49 @@ async function createServer() {
     };
   }
 
+  // Per-move turn clock. Each time it becomes a player's turn, that player has
+  // TURN_TIMEOUT_MS to move; if they don't (e.g. a human closed the tab, leaving
+  // a bot waiting forever), the game is abandoned and the room is closed so the
+  // remaining player/bot is freed instead of squatting indefinitely.
+  const TURN_TIMEOUT_MS = parseInt(process.env.TURN_TIMEOUT_MS, 10) || 30000;
+
+  function clearTurnTimer(room) {
+    if (room && room.turnTimer) {
+      clearTimeout(room.turnTimer);
+      room.turnTimer = null;
+    }
+  }
+
+  function startTurnTimer(room) {
+    clearTurnTimer(room);
+    if (!room || !room.game.inProgress) return;
+    room.turnTimer = setTimeout(async () => {
+      room.turnTimer = null;
+      if (!room.game.inProgress) return;
+      const timedOutPlayer = room.game.currentPlayer;
+      console.log(
+        `turn timeout in room ${room.code} (${timedOutPlayer ? timedOutPlayer.color : '?'})`
+      );
+      room.game.endGame();
+      if (room.game.dbId) {
+        try {
+          await db.run(
+            `UPDATE games SET status = 'abandoned', ended_at = ? WHERE id = ? AND status = 'in_progress'`,
+            Date.now(),
+            room.game.dbId
+          );
+        } catch (e) {
+          console.error('DB error marking game abandoned on turn timeout:', e);
+        }
+      }
+      room.broadcast('end-game', {
+        status: 'gameTimeout',
+        timedOutColor: timedOutPlayer ? timedOutPlayer.color : null
+      });
+      roomManager.closeRoom(room);
+    }, TURN_TIMEOUT_MS);
+  }
+
   io.on('connection', (socket) => {
     console.log(`connected: ${socket.id}`);
 
@@ -88,6 +131,7 @@ async function createServer() {
     socket.on(
       'close-room',
       getRoom(async ({ room }, fn) => {
+        clearTurnTimer(room);
         if (room.game.dbId) {
           try {
             await db.run(
@@ -149,6 +193,7 @@ async function createServer() {
         } catch (e) {
           console.error('DB error recording game start:', e);
         }
+        startTurnTimer(room);
         fn({
           status: 'startedGame',
           game: room.game,
@@ -237,6 +282,8 @@ async function createServer() {
             console.error('DB error recording move:', e);
           }
         }
+        // Restart the clock for the player who must now respond
+        startTurnTimer(room);
         fn({ status: 'placedChip', column });
       })
     );
@@ -247,6 +294,7 @@ async function createServer() {
       'end-game',
       getRoom(async ({ playerId, room }, fn) => {
         console.log('end game', playerId);
+        clearTurnTimer(room);
         room.game.endGame();
         const localPlayer = room.getPlayerById(playerId);
         room.game.requestingPlayer = localPlayer;
@@ -339,6 +387,7 @@ async function createServer() {
           } catch (e) {
             console.error('DB error recording new game start:', e);
           }
+          startTurnTimer(room);
           room.broadcast('start-new-game', {
             status: 'startedGame',
             game: room.game
@@ -423,6 +472,7 @@ async function createServer() {
       // As soon as both players disconnect from the room (making it completely
       // empty), mark the room for deletion
       if (socket.room && socket.room.isEmpty()) {
+        clearTurnTimer(socket.room);
         await roomManager.markRoomAsInactive(socket.room);
       }
     });
