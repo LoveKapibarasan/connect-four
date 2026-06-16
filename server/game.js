@@ -45,10 +45,12 @@ class Game {
   }
 
   setStartingPlayer() {
-    // The first game for a room should choose Player 2 as the starting player,
-    // as a courtesy because they are the guest
+    // Choose the first game's starting player at random so the first-move
+    // advantage is split ~50/50. (Always picking Player 2 meant a bot that
+    // reopens a fresh room every game would let the human move first every
+    // time.) Subsequent games in the same room alternate.
     if (this.startingPlayer === null) {
-      this.startingPlayer = this.players[1];
+      this.startingPlayer = this.players[Math.floor(Math.random() * this.players.length)];
     } else {
       this.startingPlayer = this.players.find(
         (player) => player.color !== this.startingPlayer.color

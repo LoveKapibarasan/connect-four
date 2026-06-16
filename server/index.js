@@ -43,6 +43,9 @@ async function createServer() {
   function startTurnTimer(room) {
     clearTurnTimer(room);
     if (!room || !room.game.inProgress) return;
+    // Tell both clients a fresh turn clock has started so they can render a
+    // countdown synced to the server's authoritative timeout.
+    room.broadcast('turn-timer', { duration: TURN_TIMEOUT_MS });
     room.turnTimer = setTimeout(async () => {
       room.turnTimer = null;
       if (!room.game.inProgress) return;

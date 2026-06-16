@@ -38,3 +38,18 @@
     }
   }
 }
+
+#turn-timer {
+  margin: 0;
+  padding-bottom: 10px;
+  font-size: var(--dashboard-text-size);
+  font-variant-numeric: tabular-nums;
+  font-weight: bold;
+  @include if-hybrid-layout() {
+    font-size: var(--dashboard-text-size-hybrid);
+  }
+  // Highlight the final seconds
+  &.urgent {
+    color: #d33;
+  }
+}

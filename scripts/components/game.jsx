@@ -30,8 +30,38 @@ class GameComponent {
 
   listenForSoundEvents() {
     this.game.on('player:place-chip', () => soundManager.drop());
-    this.game.on('game:declare-winner', () => soundManager.win());
-    this.game.on('game:declare-tie', () => soundManager.tie());
+    this.game.on('game:declare-winner', () => {
+      soundManager.win();
+      this.stopTurnCountdown();
+    });
+    this.game.on('game:declare-tie', () => {
+      soundManager.tie();
+      this.stopTurnCountdown();
+    });
+  }
+
+  // Countdown synced to the server's per-move timeout (turn-timer event). Both
+  // players see the same clock counting down the current player's remaining
+  // time; it resets every time a new turn begins.
+  startTurnCountdown(duration) {
+    this.stopTurnCountdown();
+    this.session.turnSecondsLeft = Math.max(0, Math.round(duration / 1000));
+    this.turnCountdownInterval = setInterval(() => {
+      this.session.turnSecondsLeft -= 1;
+      if (this.session.turnSecondsLeft <= 0) {
+        this.session.turnSecondsLeft = 0;
+        this.stopTurnCountdown();
+      }
+      m.redraw();
+    }, 1000);
+    m.redraw();
+  }
+
+  stopTurnCountdown() {
+    if (this.turnCountdownInterval) {
+      clearInterval(this.turnCountdownInterval);
+      this.turnCountdownInterval = null;
+    }
   }
 
   toggleMute() {
@@ -68,7 +98,12 @@ class GameComponent {
     this.session.on('end-game', ({ requestingPlayer }) => {
       this.game.requestingPlayer = requestingPlayer;
       this.game.endGame();
+      this.stopTurnCountdown();
       m.redraw();
+    });
+    // Server signals the start of each turn's clock; (re)start the countdown
+    this.session.on('turn-timer', ({ duration }) => {
+      this.startTurnCountdown(duration);
     });
     this.session.on('request-new-game', ({ requestingPlayer }) => {
       this.game.requestingPlayer = requestingPlayer;

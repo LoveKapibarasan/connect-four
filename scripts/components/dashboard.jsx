@@ -64,6 +64,14 @@ class DashboardComponent {
             'Game ended. Play again?'
           )}
         </p>
+        {game.inProgress && game.currentPlayer && session.turnSecondsLeft != null ? (
+          <p
+            id="turn-timer"
+            className={clsx('turn-timer', { urgent: session.turnSecondsLeft <= 5 })}
+          >
+            ⏱ {session.turnSecondsLeft}s
+          </p>
+        ) : null}
         <DashboardControlsComponent game={game} session={session} roomCode={roomCode} />
       </div>
     );
