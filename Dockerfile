@@ -14,7 +14,7 @@ WORKDIR /usr/app
 
 # Copy manifests first so that the dependency layer is cached independently
 # from source changes — speeds up re-builds when only source files change
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY . .
@@ -31,7 +31,7 @@ WORKDIR /usr/app
 ENV NODE_ENV=production
 
 # Install only runtime dependencies (skips eslint, playwright, sinon, etc.)
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
 # Server source and compiled frontend from the builder stage
