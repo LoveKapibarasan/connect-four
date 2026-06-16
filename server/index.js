@@ -170,48 +170,70 @@ async function createServer() {
 
     socket.on(
       'place-chip',
-      getRoom(async ({ room, column }, fn) => {
+      getRoom(async ({ room, column, playerId }, fn) => {
         console.log(`place chip ${room.code}`);
-        if (column !== null) {
-          room.game.placeChip({ column });
-          // After placeChip() is called, the turn ends for the player who placed
-          // the chip, making the other player the new current player
-          column = room.game.grid.lastPlacedChip.column;
-          if (room.game.currentPlayer && room.game.currentPlayer.socket) {
-            console.log('receive next move');
-            room.game.currentPlayer.socket.emit('receive-next-move', { column });
-          } else {
-            console.log('did not receive next move');
-            console.log('current player:', room.game.currentPlayer);
-          }
-          // Record move in DB
-          if (room.game.dbId) {
-            try {
-              room.game.moveCount += 1;
-              const lastChip = room.game.grid.lastPlacedChip;
-              const placingPlayer = room.players.find((p) => p.color === lastChip.player);
-              await db.run(
-                `
+        // Validate the move server-side rather than trusting the client: the
+        // game must be in progress, it must actually be the requesting player's
+        // turn, and the target column must be a real, non-full column. This
+        // prevents a malicious or buggy client from moving out of turn or into
+        // an invalid column.
+        const player = room.getPlayerById(playerId);
+        const grid = room.game.grid;
+        if (!room.game.inProgress) {
+          fn({ status: 'error', error: 'Game is not in progress' });
+          return;
+        }
+        if (!player || !room.game.currentPlayer || room.game.currentPlayer.id !== player.id) {
+          fn({ status: 'error', error: 'Not your turn' });
+          return;
+        }
+        if (
+          !Number.isInteger(column) ||
+          column < 0 ||
+          column >= grid.columnCount ||
+          grid.columns[column].length >= grid.rowCount
+        ) {
+          fn({ status: 'error', error: 'Invalid column' });
+          return;
+        }
+        room.game.placeChip({ column });
+        // After placeChip() is called, the turn ends for the player who placed
+        // the chip, making the other player the new current player
+        column = room.game.grid.lastPlacedChip.column;
+        if (room.game.currentPlayer && room.game.currentPlayer.socket) {
+          console.log('receive next move');
+          room.game.currentPlayer.socket.emit('receive-next-move', { column });
+        } else {
+          console.log('did not receive next move');
+          console.log('current player:', room.game.currentPlayer);
+        }
+        // Record move in DB
+        if (room.game.dbId) {
+          try {
+            room.game.moveCount += 1;
+            const lastChip = room.game.grid.lastPlacedChip;
+            const placingPlayer = room.players.find((p) => p.color === lastChip.player);
+            await db.run(
+              `
                 INSERT INTO game_moves (id, game_id, player_id, player_color, column_index, row_index, move_number, placed_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
               `,
-                uuidv4(),
-                room.game.dbId,
-                placingPlayer ? placingPlayer.id : null,
-                lastChip.player,
-                lastChip.column,
-                lastChip.row,
-                room.game.moveCount,
-                Date.now()
-              );
-              await db.run(
-                `UPDATE games SET total_moves = ? WHERE id = ?`,
-                room.game.moveCount,
-                room.game.dbId
-              );
-            } catch (e) {
-              console.error('DB error recording move:', e);
-            }
+              uuidv4(),
+              room.game.dbId,
+              placingPlayer ? placingPlayer.id : null,
+              lastChip.player,
+              lastChip.column,
+              lastChip.row,
+              room.game.moveCount,
+              Date.now()
+            );
+            await db.run(
+              `UPDATE games SET total_moves = ? WHERE id = ?`,
+              room.game.moveCount,
+              room.game.dbId
+            );
+          } catch (e) {
+            console.error('DB error recording move:', e);
           }
         }
         fn({ status: 'placedChip', column });
