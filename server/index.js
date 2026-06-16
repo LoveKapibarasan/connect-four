@@ -170,14 +170,15 @@ async function createServer() {
 
     socket.on(
       'place-chip',
-      getRoom(async ({ room, column, playerId }, fn) => {
+      getRoom(async ({ room, column }, fn) => {
         console.log(`place chip ${room.code}`);
         // Validate the move server-side rather than trusting the client: the
-        // game must be in progress, it must actually be the requesting player's
-        // turn, and the target column must be a real, non-full column. This
-        // prevents a malicious or buggy client from moving out of turn or into
-        // an invalid column.
-        const player = room.getPlayerById(playerId);
+        // game must be in progress, it must actually be this connection's turn,
+        // and the target column must be a real, non-full column. The placing
+        // player is identified by the socket's own association (set on
+        // join/add-player), not by a client-supplied playerId, so a client
+        // cannot move out of turn or impersonate the other player.
+        const player = socket.player;
         const grid = room.game.grid;
         if (!room.game.inProgress) {
           fn({ status: 'error', error: 'Game is not in progress' });
