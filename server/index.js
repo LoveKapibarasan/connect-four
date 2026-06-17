@@ -40,6 +40,38 @@ async function createServer() {
     }
   }
 
+  // Detect whether the just-placed chip completes a 4-in-a-row. Win detection
+  // was previously client-only, so games never recorded a winner server-side
+  // (every game ended up 'abandoned'); this lets the server record the result.
+  function isWinningMove(grid, chip) {
+    const color = chip.player;
+    const at = (c, r) => {
+      if (c < 0 || c >= grid.columnCount || r < 0) return null;
+      const col = grid.columns[c];
+      return r < col.length ? col[r].player : null;
+    };
+    const dirs = [
+      [1, 0],
+      [0, 1],
+      [1, 1],
+      [1, -1]
+    ];
+    for (const [dc, dr] of dirs) {
+      let count = 1;
+      for (const step of [1, -1]) {
+        let c = chip.column + dc * step;
+        let r = chip.row + dr * step;
+        while (at(c, r) === color) {
+          count += 1;
+          c += dc * step;
+          r += dr * step;
+        }
+      }
+      if (count >= 4) return true;
+    }
+    return false;
+  }
+
   function startTurnTimer(room) {
     clearTurnTimer(room);
     if (!room || !room.game.inProgress) return;
@@ -285,8 +317,42 @@ async function createServer() {
             console.error('DB error recording move:', e);
           }
         }
-        // Restart the clock for the player who must now respond
-        startTurnTimer(room);
+        // Record the game result server-side when the move ends the game (win or
+        // full-board draw), and stop the clock. Otherwise restart the clock for
+        // the player who must now respond.
+        const placedChip = room.game.grid.lastPlacedChip;
+        const boardFull = room.game.grid.columns.every(
+          (col) => col.length >= room.game.grid.rowCount
+        );
+        const won = isWinningMove(room.game.grid, placedChip);
+        if (won || boardFull) {
+          room.game.inProgress = false;
+          clearTurnTimer(room);
+          if (room.game.dbId) {
+            try {
+              if (won) {
+                const winner = room.players.find((p) => p.color === placedChip.player);
+                await db.run(
+                  `UPDATE games SET winner_id = ?, winner_color = ?, status = 'completed', ended_at = ? WHERE id = ? AND status = 'in_progress'`,
+                  winner ? winner.id : null,
+                  placedChip.player,
+                  Date.now(),
+                  room.game.dbId
+                );
+              } else {
+                await db.run(
+                  `UPDATE games SET status = 'completed', ended_at = ? WHERE id = ? AND status = 'in_progress'`,
+                  Date.now(),
+                  room.game.dbId
+                );
+              }
+            } catch (e) {
+              console.error('DB error recording game result:', e);
+            }
+          }
+        } else {
+          startTurnTimer(room);
+        }
         fn({ status: 'placedChip', column });
       })
     );

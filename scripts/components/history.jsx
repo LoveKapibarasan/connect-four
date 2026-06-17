@@ -3,7 +3,10 @@ import query from '../models/query.js';
 
 function formatDate(ts) {
   if (!ts) return '—';
-  return new Date(ts).toLocaleString(undefined, {
+  // Timestamps come back as numbers from SQLite but as strings from Postgres
+  // (BIGINT columns), so coerce before constructing a Date — otherwise
+  // new Date("1718...") yields "Invalid Date".
+  return new Date(Number(ts)).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -13,7 +16,7 @@ function formatDate(ts) {
 
 function duration(startedAt, endedAt) {
   if (!startedAt || !endedAt) return '—';
-  const secs = Math.round((endedAt - startedAt) / 1000);
+  const secs = Math.round((Number(endedAt) - Number(startedAt)) / 1000);
   if (secs < 60) return `${secs}s`;
   return `${Math.floor(secs / 60)}m ${secs % 60}s`;
 }
